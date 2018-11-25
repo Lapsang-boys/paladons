@@ -1,0 +1,34 @@
+version: '3'
+services:
+  spider:
+    hostname: spider
+    build:
+      context: spider/
+      dockerfile: Dockerfile.spider
+    env_file:
+      - env/spider.env
+    networks:
+      - backend
+
+  postgres:
+    hostname: postgres
+    build:
+      context: postgres/
+      dockerfile: Dockerfile.postgres
+    volumes:
+      - db_data:/var/lib/postgres
+    restart: always
+    ports:
+      - "5432:5432"
+    env_file:
+      - env/postgres.env
+    networks:
+      - backend
+
+networks:
+  backend:
+    driver: bridge
+
+volumes:
+    db_data:
+      driver: local

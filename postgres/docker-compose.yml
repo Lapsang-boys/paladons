@@ -1,0 +1,82 @@
+version: '3'
+services:
+  rabbit:
+    hostname: rabbit
+    build:
+      context: rabbit/
+      dockerfile: Dockerfile.rabbit
+    env_file:
+      - env/rabbit.env
+    ports:
+      - "5672:5672"
+    networks:
+      - backend
+
+  mysql:
+    hostname: mysql
+    build:
+      context: mysql/
+      dockerfile: Dockerfile.mysql
+    volumes:
+      - db_data:/var/lib/mysql
+    restart: always
+    ports:
+      - "3306:3306"
+    env_file:
+      - env/mysql.env
+    networks:
+      - backend
+
+  matrix:
+    hostname: matrix
+    build:
+      context: matrix/
+      dockerfile: Dockerfile.matrix
+    env_file:
+      - env/matrix.env
+    networks:
+      - backend
+
+  numpar:
+    hostname: numpar
+    build:
+      context: numpar/
+      dockerfile: Dockerfile.numpar
+    env_file:
+      - env/numpar.env
+    networks:
+      - backend
+
+  gateway:
+    hostname: gateway
+    build:
+      context: gateway/
+      dockerfile: Dockerfile.gateway
+    ports:
+      - "80:80"
+    expose:
+      - "80"
+    env_file:
+      - env/gateway.env
+    networks:
+      - backend
+
+  keysmith:
+    hostname: keysmith
+    build:
+      context: keysmith/
+      dockerfile: Dockerfile.keysmith
+    ports:
+     - "9312:9312"
+    env_file:
+      - env/keysmith.env
+    networks:
+      - backend
+
+networks:
+  backend:
+    driver: bridge
+
+volumes:
+    db_data:
+      driver: local

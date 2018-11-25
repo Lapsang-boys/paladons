@@ -1,0 +1,6 @@
+{
+	"concurrent_sessions": 50,
+	"sessions_per_day": 500,
+	"session_time_limit": 15,
+	"request_day_limit": 7500
+}
