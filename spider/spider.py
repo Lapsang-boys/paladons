@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 
 import psycopg2
 
@@ -14,8 +15,12 @@ with open('dev-key.json', 'r') as fp:
 
 class Spider(object):
     def __init__(self):
+        postgres_username = os.getenv("POSTGRES_USERNAME")
+        postgres_password = os.getenv("POSTGRES_PASSWORD")
+        postgres_database = os.getenv("POSTGRES_DATABASE")
+        postgres_hostname = os.getenv("POSTGRES_HOSTNAME")
         self.conn = psycopg2.connect(
-            "dbname=docker user=docker password=docker host=192.168.99.101")
+            f"dbname={postgres_database} user={postgres_username} password={postgres_password} host={postgres_hostname}")
 
     def destroy(self):
         self.conn.close()
