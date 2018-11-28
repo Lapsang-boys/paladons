@@ -1,5 +1,4 @@
 CREATE TABLE match_details (
-    id serial PRIMARY KEY NOT NULL,
     account_level int,
     assists int,
     champion varchar(64),
@@ -33,7 +32,7 @@ CREATE TABLE match_details (
     streak int,
     kills int,
     map varchar(64),
-    match_id int,
+    match_id int NOT NULL,
     match_duration int,
     highest_multi_kill int,
     objective_time int,
@@ -45,6 +44,7 @@ CREATE TABLE match_details (
     team int,
     win_status varchar(64),
     player_id int,
-    player_name varchar(64),
-    master_level int
+    player_name varchar(64) NOT NULL,
+    master_level int,
+    primary key (match_id, player_name)
 );
