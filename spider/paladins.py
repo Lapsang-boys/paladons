@@ -39,7 +39,7 @@ class Credentials():
         return f"{self.dev_id}:{self.auth_key}"
 
 class PaladinsAPI(object):
-    _MAX_MATCH_BATCH = 25
+    MAX_MATCH_BATCH = 25
     def __init__(self, credentials, session):
         self.session = session
         self.credentials = credentials
@@ -88,7 +88,7 @@ class PaladinsAPI(object):
                 # Create an index range for l of n items:
                 yield l[i:i+n]
 
-        match_batches = chunks(match_ids, self._MAX_MATCH_BATCH)
+        match_batches = chunks(match_ids, self.MAX_MATCH_BATCH)
 
         matches = []
 

@@ -13,6 +13,7 @@ import time
 import threading
 import os.path
 import pickle
+from collections import deque
 
 import psycopg2
 
@@ -59,7 +60,6 @@ class Fetcher(object):
         cur = self.conn.cursor()
         for match_obj in matches:
             md = MatchDetails(match_obj)
-            print(md.as_tuple())
 
             insert_query = "INSERT INTO match_details (account_level,assists,champion,damage_dealt,damage_taken,deaths,credits,match_date,self_healing,healing,shielding,loadout_card1,loadout_card2,loadout_card3,loadout_card4,loadout_card5,loadout_card1_level,loadout_card2_level,loadout_card3_level,loadout_card4_level,loadout_card5_level,item1,item2,item3,item4,item1_level,item2_level,item3_level,item4_level,talent,streak,kills,map,match_id,match_duration,highest_multi_kill,objective_time,party_id,platform,region,team1_score,team2_score,team,win_status,player_id,player_name,master_level) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) on conflict (match_id, player_name) do nothing;"
 
@@ -87,19 +87,22 @@ class Interval(object):
         return f"{self.date}{self.hour}, fails: {self.fail_count}"
 
     def __lt__(self, other):
-        return self.date < other.date 
+        return self.date < other.date
 
 
 class Overwatch(object):
     # TODO(_): Change to real path.
-    _FRESH_FILE = "overwatcher-fresh.pickle"
-    _FINAL_FILE = "overwatcher-final.pickle"
-
+    _COMPLETED_MATCH_FRESH_FILE     = "completed-match-fresh.pickle"
+    _COMPLETED_INTERVALS_FRESH_FILE = "completed-intervals-fresh.pickle"
+    _COMPLETED_MATCH_FINAL_FILE     = "completed-match-final.pickle"
+    _COMPLETED_INTERVALS_FINAL_FILE = "completed-intervals-final.pickle"
     _MAX_FAILS = 5
     def __init__(self):
         self.fetched = {}
         self.working = {}
         self.intervals = CheckableQueue()
+        self.session_handler = SessionHandler(CREDENTIALS)
+        self.match_ids = deque()
 
     def interval_generator(self):
         day = datetime.datetime.now() - datetime.timedelta(days=31)
@@ -132,38 +135,53 @@ class Overwatch(object):
             yield Interval(date_str, hour_str)
 
     def load(self):
-        final, fresh = None, None
-        try:
-            with open(self._FINAL_FILE, 'rb') as fp:
-                final = pickle.load(fp)
-        except Exception as e:
-            logging.error(e)
-        try:
-            with open(self._FRESH_FILE, 'rb') as fp:
-                fresh = pickle.load(fp)
-        except Exception as e:
-            logging.error(e)
+        def _load(final_path, fresh_path):
+            final, fresh = None, None
+            try:
+                with open(final_path, 'rb') as fp:
+                    final = pickle.load(fp)
+            except Exception as e:
+                logging.error(e)
+            try:
+                with open(fresh_path, 'rb') as fp:
+                    fresh = pickle.load(fp)
+            except Exception as e:
+                logging.error(e)
 
-        if final == None and fresh == None:
-            logging.warning("Unable to load overwatcher from both final or fresh.")
-            return
+            if final == None and fresh == None:
+                logging.warning(f"Unable to load overwatcher from both {final_path} or {fresh_path}.")
+                return
 
-        print(fresh)
-        if final == None:
-            logging.warning("Unable to load main overwatcher persistent backup, using fresh file.")
-            self.fetched = fresh
-            return
+            if final == None:
+                logging.warning(f"Unable to load main overwatcher persistent backup, using {fresh_path} file.")
+                return fresh
 
-        logging.info("Using previous main overwatcher backup.")
-        self.fetched = final
+            logging.info(f"Using {final_path} previous main overwatcher backup.")
+            return final
+
+        fetched = _load(self._COMPLETED_INTERVALS_FINAL_FILE, self._COMPLETED_INTERVALS_FRESH_FILE)
+        if fetched:
+            self.fetched = fetched
+        match_ids = _load(self._COMPLETED_MATCH_FINAL_FILE, self._COMPLETED_MATCH_FRESH_FILE)
+        if match_ids:
+            self.match_ids = match_ids
+
         self.remove_old_intervals()
 
     def save(self):
+        # We can only recover intervals, but not matches. Therefore, it is of
+        # most importance to ensure that matches are correctly persisted. Since
+        # in the worst case we can reproduce them from the intervals that have
+        # yet to be fetched.
         try:
-            with open(self._FRESH_FILE, 'wb') as fp:
+            with open(self._COMPLETED_MATCH_FRESH_FILE, 'wb') as fp:
+                pickle.dump(self.match_ids, fp)
+            with open(self._COMPLETED_INTERVALS_FRESH_FILE, 'wb') as fp:
                 pickle.dump(self.fetched, fp)
             time.sleep(1)
-            with open(self._FINAL_FILE, 'wb') as fp:
+            with open(self._COMPLETED_MATCH_FINAL_FILE, 'wb') as fp:
+                pickle.dump(self.match_ids, fp)
+            with open(self._COMPLETED_INTERVALS_FINAL_FILE, 'wb') as fp:
                 pickle.dump(self.fetched, fp)
         except Exception as e:
             logging.error(e)
@@ -187,7 +205,7 @@ class Overwatch(object):
             if not is_new(key):
                 return
             self.intervals.put((prio, interval))
-            prio += 0
+            prio += 1
 
         # Generate todays intervals, at most 10 minutes behind.
         for interval in self.today_interval_generator():
@@ -195,15 +213,15 @@ class Overwatch(object):
             if not is_new(key):
                 return
             self.intervals.put((prio, interval))
-            prio += 0
+            prio += 1
 
     def get_interval(self):
         while True:
-            logging.debug("Oh no")
-            _, interval = self.intervals.get()
+            prio, interval = self.intervals.get()
             if interval.fail_count >= self._MAX_FAILS:
                 logging.error("Abandoning this shit: {interval.key()}")
                 continue
+            logging.debug(f"PriorityQueue prio: {prio}")
             break
 
         self.working[interval.key()] = True
@@ -220,8 +238,8 @@ class Overwatch(object):
 
     def remove_old_intervals(self):
         now = datetime.datetime.now()
-        def is_old(self):
-            date = datetime.strptime(self.interval, '%Y%m%d%H,%S')
+        def is_old(interval_str):
+            date = datetime.datetime.strptime(interval_str, '%Y%m%d%H,%S')
             difference = now - date
             return difference > datetime.timedelta(days=32)
 
@@ -233,8 +251,33 @@ class Overwatch(object):
 
     def info(self):
         logging.info(self.fetched)
-        logging.info(self.working)
-        logging.info(self.intervals.qsize())
+        logging.info(self.match_ids)
+
+    def create_session(self):
+        return self.session_handler.create()
+
+    def put_matches(self, match_ids):
+        for id in match_ids:
+            self.match_ids.append(id)
+
+    def put_back_matches(self, matches):
+        for match in matches:
+            self.match_ids.append(match)
+
+    def get_match(self):
+        return self.match_ids.popleft()
+
+def time_to_next_day():
+    # Sleep until midnight.
+    now = datetime.datetime.now()
+    tomorrow = datetime.datetime(
+        year=now.year,
+        month=now.month,
+        day=now.day+1,
+        minute=1)
+
+    til_next_day = tomorrow - now
+    return til_next_day
 
 def remove_old_intervals(overwatcher):
     logging.info("Starting persist_overwatcher")
@@ -244,12 +287,16 @@ def remove_old_intervals(overwatcher):
         overwatcher.remove_old_intervals()
 
 def persist_overwatcher(overwatcher):
-    overwatcher.fetched['asdf'] = True
     logging.info("Starting remove_old_intervals")
     while True:
-        time.sleep(PERSIST_INTERVAL)
+        # time.sleep(PERSIST_INTERVAL)
+        time.sleep(15)
         logging.info("Saving overwatcher")
-        overwatcher.save()
+        try:
+            overwatcher.save()
+        except Exception as e:
+            logging.error("Unexpected error: {e}")
+            continue
         logging.info("Saved overwatcher")
 
 def generate_intervals(overwatcher):
@@ -260,11 +307,9 @@ def generate_intervals(overwatcher):
         logging.info("Finished generating intervals")
         time.sleep(GENERATE_INTERVALS_INTERVAL)
 
-def fetch_intervals(overwatcher):
+def fetch_intervals(fetcher, overwatcher):
     logging.info("Starting fetch_intervals")
-    while i in range(5):
-        logging.warning(f"Using request: {i}")
-
+    while True:
         try:
             interval = overwatcher.get_interval()
         except queue.Empty as e:
@@ -274,32 +319,87 @@ def fetch_intervals(overwatcher):
 
         logging.debug(f"Got interval: {interval}")
 
-        # Do requests.
-
-        if error:
+        try:
+            match_ids = fetcher.api.get_match_ids_by_queue(
+                GameMode.siege,
+                interval.date,
+                interval.hour)
+        except RequestLimitException as re:
+            # Return interval we couldn't fetch.
             overwatcher.put_back_interval(interval)
+
+            logging.info("Reached request limit for today, good job!")
+            til_next_day = time_to_next_day()
+
+            # Sleep at most one hour.
+            if til_next_day > 3600:
+                time.sleep(3600)
+            else:
+                time.sleep(til_next_day.seconds)
+            continue
+        except Exception as e:
+            logging.error("Unexpected error: {e}")
             continue
 
+        overwatcher.put_matches(match_ids)
+
+        # Do requests.
         overwatcher.register_finish(interval)
+
+# We know that a crash + save could lose information here.
+def fetch_matches(fetcher, overwatcher):
+    logging.info("Starting fetch_matches")
+    matches = []
+    while True:
+        try:
+            match = overwatcher.get_match()
+            matches.append(match)
+        except IndexError as e:
+            logging.debug(e)
+            time.sleep(60)
+            continue
+
+        logging.debug(f"Got match: {match}")
+        if len(matches) < fetcher.api.MAX_MATCH_BATCH:
+            continue
+
+        logging.debug(f"Got match: {matches}")
+
+        param = matches
+        matches = []
+        try:
+            match_details = fetcher.api.get_match_batch(param)
+        except RequestLimitException as re:
+            # Return interval we couldn't fetch.
+            overwatcher.put_back_matches(matches)
+
+            logging.info("Reached request limit for today, good job!")
+            til_next_day = time_to_next_day()
+
+            # Sleep at most one hour.
+            if til_next_day > 3600:
+                time.sleep(3600)
+            else:
+                time.sleep(til_next_day.seconds)
+            continue
+        except Exception as e:
+            logging.error("Unexpected error: {e}")
+            continue
+
+        fetcher.insert_matches(match_details)
 
 def main():
     overwatcher = Overwatch()
     logging.info("Reading old overwatcher")
-    overwatcher.info()
     overwatcher.load()
-
-    session_handler = SessionHandler(CREDENTIALS)
-    session = session_handler.create()
-    fetcher = Fetcher(session)
-    match_ids = fetcher.api.get_match_ids_by_queue(GameMode.siege, date, hour)
-    print(match_ids)
+    overwatcher.info()
 
     # matches = api.get_match_batch(match_ids)
 
     # player_name = "döskalle"
-    # try:
     #     player = fetcher.api.get_player(player_name)
     #     history = fetcher.api.get_match_history(player)
+    # try:
     # except RequestLimitException as re:
     #     logging.info("Reached request limit for today, good job!")
     #     return
@@ -324,10 +424,23 @@ def main():
         daemon=True,
         args=(overwatcher,)).start()
 
-    threading.Thread(
-        name='fetch_intervals',
-        target=fetch_intervals,
-        args=(overwatcher,)).start()
+    fetcher = None
+    for i in range(1):
+        session = overwatcher.create_session()
+        fetcher = Fetcher(session)
+
+        threading.Thread(
+            name='fetch_intervals',
+            target=fetch_intervals,
+            args=(fetcher,overwatcher)).start()
+
+        threading.Thread(
+            name='fetch_matches',
+            target=fetch_matches,
+            args=(fetcher,overwatcher)).start()
+
+    data_used = fetcher.api.get_data_used()
+    logging.info(data_used)
 
 if __name__ == "__main__":
     main()
