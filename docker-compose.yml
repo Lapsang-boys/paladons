@@ -9,6 +9,8 @@ services:
       - env/spider.env
     networks:
       - backend
+    volumes:
+      - spider_data:/persist
 
   postgres:
     hostname: postgres

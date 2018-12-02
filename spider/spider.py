@@ -1,9 +1,3 @@
-"""
-Don't forget to reduce fetched size, otherwise we will get memory issues.
-
-Remove fail_count > threshold
-"""
-
 import json
 import logging
 import os
