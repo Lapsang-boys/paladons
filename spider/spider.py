@@ -289,7 +289,7 @@ def persist_overwatcher(overwatcher):
         try:
             overwatcher.save()
         except Exception as e:
-            logging.error("Unexpected error: {e}")
+            logging.error(f"Unexpected error: {e}")
             continue
         logging.info("Saved overwatcher")
 
@@ -332,9 +332,10 @@ def fetch_intervals(fetcher, overwatcher):
                 time.sleep(til_next_day.seconds)
             continue
         except Exception as e:
-            logging.error("Unexpected error: {e}")
+            logging.error(f"Unexpected error: {e}")
             continue
 
+        logging.debug(match_ids)
         overwatcher.put_matches(match_ids)
 
         # Do requests.
@@ -377,7 +378,7 @@ def fetch_matches(fetcher, overwatcher):
                 time.sleep(til_next_day.seconds)
             continue
         except Exception as e:
-            logging.error("Unexpected error: {e}")
+            logging.error(f"Unexpected error: {e}")
             continue
 
         fetcher.insert_matches(match_details)
