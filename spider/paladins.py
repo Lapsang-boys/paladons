@@ -174,10 +174,11 @@ class Session():
         contents = self._request(endpoint)
         session_obj = json.loads(contents)
         logging.debug(session_obj)
+
         if session_obj['ret_msg'] != 'Approved':
+            # 'Maximum number of active sessions reached.'
             logging.error(session_obj['ret_msg'])
             return
-
         return session_obj['session_id']
 
     def is_alive(self):
@@ -185,6 +186,7 @@ class Session():
         return diff.seconds < self._SESSION_LENGTH
 
     def renew(self, credentials):
+        self.created = datetime.datetime.now()
         self.id = self._create(credentials)
 
     def save(self):
@@ -234,10 +236,8 @@ class SessionHandler(object):
     def allow_request(self):
         if self.total_requests.inc() >= self._REQUESTS_DAY_LIMIT:
             self.total_requests.dec()
-            raise 
+            # TODO(_): Raise exception?
             return False
-            # Say no.
-
         return True
 
 from enum import Enum
