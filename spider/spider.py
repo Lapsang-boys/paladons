@@ -63,6 +63,19 @@ class Fetcher(object):
         self.conn.commit()
         cur.close()
 
+
+    def track_exists(self, track_id):
+        cur = self.conn.cursor()
+        cur.execute("SELECT fma_track_id FROM tracks WHERE fma_track_id = %s", (track_id,))
+
+    def is_already_fetched(self, match_id):
+        cur = self.conn.cursor()
+        cur.execute("SELECT exists (select 1 FROM match_details WHERE match_id = %s)", (match_id,))
+        self.conn.commit()
+        cur.close()
+        return cur.fetchone()[0]
+
+
 class CheckableQueue(queue.PriorityQueue):
     def __contains__(self, item):
         with self.mutex:
@@ -348,11 +361,15 @@ def fetch_matches(fetcher, overwatcher):
     while True:
         try:
             match = overwatcher.get_match()
-            matches.append(match)
         except IndexError as e:
             logging.debug(e)
             time.sleep(60)
             continue
+
+        if fetcher.is_already_fetched(match):
+            continue
+
+        matches.append(match)
 
         logging.debug(f"Got match: {match}")
         if len(matches) < fetcher.api.MAX_MATCH_BATCH:
@@ -381,7 +398,11 @@ def fetch_matches(fetcher, overwatcher):
             logging.error(f"Unexpected error: {e}")
             continue
 
-        fetcher.insert_matches(match_details)
+        try:
+            fetcher.insert_matches(match_details)
+        except Exception as e:
+            logging.error(f"Unexpected error: {e}")
+            continue
 
 def main():
     overwatcher = Overwatch()
