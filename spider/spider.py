@@ -124,12 +124,10 @@ class Overwatch(object):
         day = datetime.datetime.now() - datetime.timedelta(days=31)
         for i in range(31):
             date_str = day.strftime("%Y%m%d")
-            for hour in range(24):
-                for minute_range in range(6):
-                    hour_str = "%02d,%02d" % (hour, minute_range*10)
-                    yield Interval(date_str, hour_str)
-
+            hour_str = "-1"
             day += datetime.timedelta(days=1)
+
+            yield Interval(date_str, hour_str)
 
     def today_interval_generator(self):
         now = datetime.datetime.now()
