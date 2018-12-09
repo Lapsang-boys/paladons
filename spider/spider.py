@@ -18,7 +18,7 @@ from paladins import RequestLimitException, SessionHandler
 LOG_DATA_USAGE_INTERVAL = 60 * 5
 
 # Every ten minutes we will save overwatcher to disk.
-PERSIST_INTERVAL = 600 * 1
+PERSIST_INTERVAL = 60 * 5
 
 # Every day we remove all old intervals from overwatcher fetched.
 REMOVE_INTERVALS_INTERVAL = 24*3600*1
@@ -315,8 +315,7 @@ def remove_old_intervals(overwatcher):
 def persist_overwatcher(overwatcher):
     logging.info("Starting remove_old_intervals")
     while True:
-        # time.sleep(PERSIST_INTERVAL)
-        time.sleep(15)
+        time.sleep(PERSIST_INTERVAL)
         logging.info("Saving overwatcher")
         try:
             overwatcher.save()
