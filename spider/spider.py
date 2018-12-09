@@ -326,6 +326,8 @@ def generate_intervals(overwatcher):
 
 def fetch_intervals(fetcher, overwatcher):
     logging.info("Starting fetch_intervals")
+
+    log_count = 0
     while True:
         try:
             interval = overwatcher.get_interval()
@@ -364,10 +366,19 @@ def fetch_intervals(fetcher, overwatcher):
         # Do requests.
         overwatcher.register_finish(interval)
 
+        if log_count % 100 == 0 and log_count != 0:
+            logging.info(f"[Matches] Log count: {log_count}")
+        log_count += 1
+
 # We know that a crash + save could lose information here.
 def fetch_matches(fetcher, overwatcher):
+    # Wait for intervals.
+    time.sleep(10)
+
     logging.info("Starting fetch_matches")
     matches = []
+
+    log_count = 0
     while True:
         try:
             match = overwatcher.get_match()
@@ -413,6 +424,11 @@ def fetch_matches(fetcher, overwatcher):
         except Exception as e:
             logging.error(f"Unexpected error: {e}")
             continue
+
+        if log_count % 100 == 0 and log_count != 0:
+            logging.info(f"[Matches] Log count: {log_count}")
+        log_count += 1
+
 
 def main():
     overwatcher = Overwatch()
