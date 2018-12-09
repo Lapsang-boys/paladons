@@ -373,7 +373,7 @@ def fetch_intervals(fetcher, overwatcher):
         overwatcher.register_finish(interval)
 
         if log_count % 100 == 0 and log_count != 0:
-            logging.info(f"[Matches] Log count: {log_count}")
+            logging.info(f"[Intervals] Log count: {log_count}")
         log_count += 1
 
 # We know that a crash + save could lose information here.
