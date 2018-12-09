@@ -256,7 +256,9 @@ class Overwatch(object):
     def remove_old_intervals(self):
         now = datetime.datetime.now()
         def is_old(interval_str):
-            date = datetime.datetime.strptime(interval_str, '%Y%m%d%H,%S')
+            # Parse different interval formats.
+            date = parse_date(interval_str)
+            # Test catch-up format
             difference = now - date
             return difference > datetime.timedelta(days=32)
 
@@ -283,6 +285,14 @@ class Overwatch(object):
 
     def get_match(self):
         return self.match_ids.popleft()
+
+def parse_date(interval_str):
+    try:
+        # 10 minute-intervals.
+        return datetime.datetime.strptime(interval_str, '%Y%m%d%H,%S')
+    except ValueError as ve:
+        # Full day intervals.
+        return datetime.datetime.strptime(interval_str, '%Y%m%d-1')
 
 def time_to_next_day():
     # Sleep until midnight.
