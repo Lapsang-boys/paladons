@@ -103,10 +103,15 @@ class Interval(object):
 
 class Overwatch(object):
     # TODO(_): Change to real path.
-    _COMPLETED_MATCH_FRESH_FILE     = "completed-match-fresh.pickle"
-    _COMPLETED_INTERVALS_FRESH_FILE = "completed-intervals-fresh.pickle"
-    _COMPLETED_MATCH_FINAL_FILE     = "completed-match-final.pickle"
-    _COMPLETED_INTERVALS_FINAL_FILE = "completed-intervals-final.pickle"
+    folder = "/tmp"
+    if os.getenv("IS_DOCKER"):
+        folder = "/persist"
+
+    _COMPLETED_MATCH_FRESH_FILE     = f"{folder}/completed-match-fresh.pickle"
+    _COMPLETED_INTERVALS_FRESH_FILE = f"{folder}/completed-intervals-fresh.pickle"
+    _COMPLETED_MATCH_FINAL_FILE     = f"{folder}/completed-match-final.pickle"
+    _COMPLETED_INTERVALS_FINAL_FILE = f"{folder}/completed-intervals-final.pickle"
+
     _MAX_FAILS = 5
     def __init__(self):
         self.fetched = {}
