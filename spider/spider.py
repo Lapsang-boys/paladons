@@ -14,6 +14,9 @@ import psycopg2
 from paladins import PaladinsAPI, Credentials, GameMode, MatchDetails
 from paladins import RequestLimitException, SessionHandler
 
+# Log data usage every 5 minutes.
+LOG_DATA_USAGE_INTERVAL = 60 * 5
+
 # Every ten minutes we will save overwatcher to disk.
 PERSIST_INTERVAL = 600 * 1
 
@@ -436,6 +439,14 @@ def fetch_matches(fetcher, overwatcher):
         log_count += 1
 
 
+def log_data_used(fetcher):
+    logging.info("Starting log_data_used")
+    while True:
+        data_used = fetcher.api.get_data_used()
+        logging.info(data_used)
+        time.sleep(LOG_DATA_USAGE_INTERVAL)
+
+
 def main():
     overwatcher = Overwatch()
     logging.info("Reading old overwatcher")
@@ -477,6 +488,12 @@ def main():
         fetcher = Fetcher(session)
 
         threading.Thread(
+            name='log_data_used',
+            target=log_data_used,
+            daemon=True,
+            args=(fetcher,)).start()
+
+        threading.Thread(
             name='fetch_intervals',
             target=fetch_intervals,
             args=(fetcher,overwatcher)).start()
@@ -485,9 +502,6 @@ def main():
             name='fetch_matches',
             target=fetch_matches,
             args=(fetcher,overwatcher)).start()
-
-    data_used = fetcher.api.get_data_used()
-    logging.info(data_used)
 
 if __name__ == "__main__":
     main()
