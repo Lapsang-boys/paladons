@@ -268,10 +268,6 @@ class Overwatch(object):
             # Remove old intervals.
             del self.fetched[k]
 
-    def info(self):
-        logging.info(self.fetched)
-        logging.info(self.match_ids)
-
     def create_session(self):
         return self.session_handler.create()
 
@@ -444,7 +440,6 @@ def main():
     overwatcher = Overwatch()
     logging.info("Reading old overwatcher")
     overwatcher.load()
-    overwatcher.info()
 
     # matches = api.get_match_batch(match_ids)
 
