@@ -75,9 +75,12 @@ class Fetcher(object):
     def is_already_fetched(self, match_id):
         cur = self.conn.cursor()
         cur.execute("SELECT exists (select 1 FROM match_details WHERE match_id = %s)", (match_id,))
+
+        exists = cur.fetchone()[0]
+
         self.conn.commit()
         cur.close()
-        return cur.fetchone()[0]
+        return exists
 
 
 class CheckableQueue(queue.PriorityQueue):
